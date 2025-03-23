@@ -35,6 +35,9 @@ jobs:
   ubuntu-build:
     name: Build on ${{ inputs.runs-on }}
     runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: write
+      actions: write    
     steps:
       - uses: actions/checkout@v4
       - name: Get build dept.
