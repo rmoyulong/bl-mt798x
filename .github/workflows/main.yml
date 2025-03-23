@@ -1,5 +1,4 @@
 name: Uboot Ubuntu CI Build
-run-name: Uboot - ${{ inputs.board }} (${{ inputs.soc }})
 
 on:
   workflow_dispatch:
