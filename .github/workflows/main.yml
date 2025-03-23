@@ -1,6 +1,8 @@
 name: Uboot Ubuntu CI Build
 
 on:
+  #对应的是 UTC 时间，需要转换，0 代表北京时间8点，每个月1日/15日12点编译一次
+  #关闭则手动编译
   workflow_dispatch:
     inputs:
       soc:
@@ -33,7 +35,7 @@ on:
 
 jobs:
   ubuntu-build:
-    name: Build on ${{ inputs.runs-on }}
+    name: Build U-Boot-798x
     runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: write
