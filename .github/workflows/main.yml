@@ -1,8 +1,9 @@
-name: Uboot Ubuntu CI Build
+name: Build U-Boot
 
 on:
-  #对应的是 UTC 时间，需要转换，0 代表北京时间8点，每个月1日/15日12点编译一次
-  #关闭则手动编译
+  #schedule:  
+    #- cron: "0 2 15 * *"
+
   workflow_dispatch:
     inputs:
       soc:
@@ -12,48 +13,124 @@ on:
         default: mt7981
       board:
         required: true
-        description: Router Model Name
+        description: 路由架构名称
         type: string
         default: cmcc_rax3000m
       multi-layout:
         required: true
-        description: Enable Multiple Flash Layout Support
+        description: 多分区支持
         type: choice
         default: '0'
         options:
           - '0'
           - '1'
-      runs-on:
-        required: true
-        description: Runs on...
-        type: choice
-        default: ubuntu-latest
-        options:
-          - ubuntu-22.04
-          - ubuntu-24.04
-          - ubuntu-latest
+env:
+  #REPO_URL: https://github.com/hanwckf/bl-mt798x.git
+  REPO_URL: https://github.com/rmoyulong/bl-mt798x
+  REPO_BRANCH: master
+  TZ: Asia/Shanghai
 
 jobs:
-  ubuntu-build:
-    name: Build U-Boot-798x
-    runs-on: ${{ inputs.runs-on }}
+  build:
+    name: Build U-Boot
+    runs-on: ubuntu-latest
+
     permissions:
       contents: write
-      actions: write    
+      actions: write
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Get build dept.
-        run: |
-          sudo apt update
-          sudo apt install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev device-tree-compiler
-      - name: Build it
-        run: |
-          ./build.sh
-        env:
-          SOC: ${{ inputs.soc }}
-          BOARD: ${{ inputs.board }}
-          MULTI_LAYOUT: ${{ inputs.multi-layout }}
-      - uses: actions/upload-artifact@v4
+
+      - name: Free disk space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
         with:
-          name: Uboot - ${{ inputs.board }} (${{ inputs.soc }})
-          path: output/*.bin
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+          
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: false
+
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Initialization environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+
+          sudo -E apt-get -qq install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev device-tree-compiler
+
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+
+          sudo timedatectl set-timezone "$TZ"
+          
+          sudo mkdir -p /srcdir
+          sudo chown $USER:$GROUPS /srcdir
+
+      - name: Clone Source Repository
+        working-directory: /srcdir
+        run: |
+           echo "Free space:"
+            df -hT $PWD
+            git clone $REPO_URL -b $REPO_BRANCH u-boot
+            ln -sf /srcdir/u-boot $GITHUB_WORKSPACE/u-boot      
+
+      - name: Compile U-Boot
+        id: compile
+        run: |
+          cd u-boot
+          SOC=${{ inputs.soc }} BOARD=${{ inputs.board }} MULTI_LAYOUT=${{ inputs.multi-layout }} FIXED_MTDPARTS=1 ./build.sh
+          
+          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Upload bin directory
+        uses: actions/upload-artifact@main
+        if: steps.compile.outputs.status == 'success' && !cancelled()
+        with:
+          name: u-boot_bin_${{ inputs.board }}${{ env.FILE_DATE }}
+          path: u-boot/output
+
+      - name: Generate release tag
+        id: tag
+        if: steps.compile.outputs.status == 'success' && !cancelled()
+        run: |
+          echo "release_tag=U-Boot_${{ inputs.board }}_$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+          touch release.txt
+          echo "U-Boot 🌝 ${{ inputs.board }} " >> release.txt
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Upload firmware to release
+        id: release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.status == 'success' && !cancelled()
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          files: u-boot/output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+      # - name: Delete workflow runs
+      #   uses: Mattraks/delete-workflow-runs@v2
+      #   with:
+      #     token: ${{ github.token }}
+      #     repository: ${{ github.repository }}
+      #     retain_days: 7
+      #     keep_minimum_runs: 3
+
+      # - name: Remove old Releases
+      #   uses: dev-drprasad/delete-older-releases@v0.3.4
+      #   if: steps.release.outputs.status == 'success' && !cancelled()
+      #   with:
+      #     keep_latest: 3
+      #     delete_tags: true
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
