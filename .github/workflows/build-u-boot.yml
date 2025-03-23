@@ -23,7 +23,7 @@ jobs:
 
     strategy:
       matrix:
-        board: [cmcc-rax3000m] 
+        board: [cmcc_rax3000m, cmcc_rax3000m-emmc] 
 
     steps:
 
