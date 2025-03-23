@@ -14,7 +14,7 @@ env:
 
 jobs:
   build:
-    name: Build U-Boot
+    name: Build U-Boot 2025
     runs-on: ubuntu-latest
 
     permissions:

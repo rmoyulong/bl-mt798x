@@ -88,9 +88,9 @@ jobs:
         id: tag
         if: steps.compile.outputs.status == 'success' && !cancelled()
         run: |
-          echo "release_tag=U-Boot_$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+          echo "release_tag=Old_U-Boot_$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
           touch release.txt
-          echo "U-Boot 🌝 xiaomi ax3000t" >> release.txt
+          echo "U-Boot 🌝 ${{ matrix.board }} " >> release.txt
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: Upload firmware to release
@@ -98,7 +98,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: steps.tag.outputs.status == 'success' && !cancelled()
         with:
-          tag_name: ${{ old_steps.tag.outputs.release_tag }}
+          tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           files: u-boot/output/*
         env:
